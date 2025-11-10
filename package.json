@@ -1,0 +1,47 @@
+{
+  "name": "strategic-bug-fixer-agent",
+  "version": "2.0.0",
+  "description": "AI-powered bug fixing agent with functional programming architecture",
+  "main": "src/bug-fixer.js",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "test:coverage": "vitest run --coverage",
+    "fix-bug": "node src/bug-fixer.js",
+    "ci-fix": "node src/ci-bug-fixer.js",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write --unsafe .",
+    "format": "biome format --write .",
+    "typecheck": "tsc --noEmit",
+    "demo": "node scripts/demo-bug-fixer.js"
+  },
+  "keywords": [
+    "ai",
+    "bug-fixing",
+    "automation",
+    "strategic-agent",
+    "debugging",
+    "functional-programming",
+    "openai",
+    "gpt-4o-mini"
+  ],
+  "author": "Jordan Mowry",
+  "license": "MIT",
+  "dependencies": {
+    "@ai-sdk/openai": "^0.0.66",
+    "ai": "^4.0.0",
+    "dotenv": "^16.4.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@vitest/coverage-v8": "^2.1.8",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=10.0.0"
+  }
+}
