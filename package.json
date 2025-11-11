@@ -28,8 +28,13 @@
   ],
   "author": "Jordan Mowry",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jordanbmowry/strategic-bug-fixer-agent.git"
+  },
   "dependencies": {
     "@ai-sdk/openai": "^0.0.66",
+    "@jordanbmowry/agent-configuration": "file:../agent-configuration",
     "ai": "^4.0.0",
     "dotenv": "^16.4.5",
     "zod": "^3.23.8"

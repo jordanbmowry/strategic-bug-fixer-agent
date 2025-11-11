@@ -1,44 +1,43 @@
 /**
- * Unit tests for cost monitor module
+ * Unit tests for cost monitor (from centralized configuration)
  */
 
-import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  DEFAULT_LIMITS,
+  MODEL_PRICING,
   calculateCost,
-  canAffordFix,
-  compareModelCosts,
   createCostTracker,
-  estimateFixCost,
+  estimateCost,
   estimateTokens,
   formatCost,
-  generateCostReport,
-  getCheapestModel,
-  getCostStats,
   getModelPricing,
-  getMostExpensiveModel,
   isWithinLimits,
-  recordFixCost,
   requiresWarning,
-} from '../../src/cost-monitor.js';
+} from '@jordanbmowry/agent-configuration/cost-monitor';
+import { beforeEach, describe, expect, it } from 'vitest';
 
-describe('Cost Monitor Module', () => {
+describe('Cost Monitor (Centralized)', () => {
   describe('Model Pricing', () => {
-    it('should return frozen pricing object', () => {
-      const pricing = getModelPricing();
+    it('should return pricing for known models', () => {
+      const pricing = getModelPricing('gpt-4o-mini');
 
-      expect(pricing).toHaveProperty('gpt-4o-mini');
-      expect(pricing).toHaveProperty('gpt-4o');
-      expect(pricing).toHaveProperty('gpt-4');
+      expect(pricing).toHaveProperty('input');
+      expect(pricing).toHaveProperty('output');
+      expect(pricing.input).toBeLessThan(pricing.output);
       expect(Object.isFrozen(pricing)).toBe(true);
     });
 
-    it('should have correct pricing structure', () => {
-      const pricing = getModelPricing();
-      const miniPricing = pricing['gpt-4o-mini'];
+    it('should return mini pricing for unknown models', () => {
+      const unknownPricing = getModelPricing('unknown-model');
+      const miniPricing = getModelPricing('gpt-4o-mini');
 
-      expect(miniPricing).toHaveProperty('input');
-      expect(miniPricing).toHaveProperty('output');
-      expect(miniPricing.input).toBeLessThan(miniPricing.output);
+      expect(unknownPricing).toEqual(miniPricing);
+    });
+
+    it('should have MODEL_PRICING constant', () => {
+      expect(MODEL_PRICING).toHaveProperty('gpt-4o-mini');
+      expect(MODEL_PRICING).toHaveProperty('gpt-4o');
+      expect(Object.isFrozen(MODEL_PRICING)).toBe(true);
     });
   });
 
@@ -50,75 +49,78 @@ describe('Cost Monitor Module', () => {
       expect(typeof cost).toBe('number');
     });
 
-    it('should use mini pricing for unknown models', () => {
-      const cost = calculateCost('unknown-model', 1000, 1000);
-      const miniCost = calculateCost('gpt-4o-mini', 1000, 1000);
-
-      expect(cost).toBe(miniCost);
-    });
-
-    it('should estimate tokens from code length', () => {
+    it('should estimate tokens from text length', () => {
       const tokens = estimateTokens(1000);
 
-      expect(tokens).toBeGreaterThan(0);
       expect(tokens).toBe(Math.ceil(1000 / 4));
+      expect(tokens).toBeGreaterThan(0);
     });
 
-    it('should estimate fix cost correctly', () => {
-      const cost = estimateFixCost(1000, 2000, 'gpt-4o-mini');
+    it('should estimate tokens from string', () => {
+      const text = 'a'.repeat(1000);
+      const tokens = estimateTokens(text);
+
+      expect(tokens).toBe(250); // 1000 chars / 4
+    });
+
+    it('should estimate operation cost', () => {
+      const cost = estimateCost('gpt-4o-mini', 1000, 2000);
 
       expect(cost).toBeGreaterThan(0);
       expect(typeof cost).toBe('number');
-    });
-
-    it('should use default parameters for fix cost estimation', () => {
-      const cost = estimateFixCost(1000);
-      expect(cost).toBeGreaterThan(0);
     });
   });
 
   describe('Cost Limits', () => {
     it('should check if cost is within limits', () => {
-      expect(isWithinLimits(1.0, 10.0, 5.0)).toBe(true);
-      expect(isWithinLimits(6.0, 10.0, 5.0)).toBe(false);
+      const result = isWithinLimits(1.0, 5.0, { daily: 10.0, perOperation: 2.0 });
+
+      expect(result.allowed).toBe(true);
+      expect(result.withinDaily).toBe(true);
+      expect(result.withinPerOperation).toBe(true);
+      expect(Object.isFrozen(result)).toBe(true);
+    });
+
+    it('should detect daily limit exceeded', () => {
+      const result = isWithinLimits(6.0, 5.0, { daily: 10.0, perOperation: 10.0 });
+
+      expect(result.allowed).toBe(false);
+      expect(result.withinDaily).toBe(false);
+      expect(result.reason).toContain('Daily limit');
+    });
+
+    it('should detect per-operation limit exceeded', () => {
+      const result = isWithinLimits(6.0, 0, { daily: 100.0, perOperation: 5.0 });
+
+      expect(result.allowed).toBe(false);
+      expect(result.withinPerOperation).toBe(false);
+      expect(result.reason).toContain('Per-operation limit');
     });
 
     it('should use default limits', () => {
-      expect(isWithinLimits(5.0)).toBe(true);
-      expect(isWithinLimits(15.0)).toBe(false);
+      const result = isWithinLimits(5.0, 0);
+
+      expect(result).toHaveProperty('allowed');
+      expect(result).toHaveProperty('dailyRemaining');
     });
 
     it('should check if warning is required', () => {
-      expect(requiresWarning(0.5, 1.0)).toBe(false);
-      expect(requiresWarning(1.5, 1.0)).toBe(true);
+      expect(requiresWarning(0.3, 0.5)).toBe(false);
+      expect(requiresWarning(0.5, 0.5)).toBe(true);
+      expect(requiresWarning(0.6, 0.5)).toBe(true);
     });
   });
 
   describe('Cost Formatting', () => {
-    it('should format cost with 4 decimal places', () => {
-      expect(formatCost(1.23456)).toBe('$1.2346');
-      expect(formatCost(0.0001)).toBe('$0.0001');
-    });
-  });
-
-  describe('Model Selection', () => {
-    it('should return cheapest model', () => {
-      expect(getCheapestModel()).toBe('gpt-4o-mini');
+    it('should format costs correctly', () => {
+      expect(formatCost(1.23456)).toContain('$');
+      expect(formatCost(0.0001)).toContain('$');
+      expect(formatCost(10.5)).toContain('$');
     });
 
-    it('should return most expensive model', () => {
-      expect(getMostExpensiveModel()).toBe('gpt-4');
-    });
-
-    it('should compare model costs correctly', () => {
-      const comparison = compareModelCosts('gpt-4o-mini', 'gpt-4', 1000, 1000);
-
-      expect(comparison).toHaveProperty('model1');
-      expect(comparison).toHaveProperty('model2');
-      expect(comparison).toHaveProperty('cheaper');
-      expect(comparison).toHaveProperty('savings');
-      expect(comparison.cheaper).toBe('gpt-4o-mini');
-      expect(Object.isFrozen(comparison)).toBe(true);
+    it('should format small costs in millicents', () => {
+      const formatted = formatCost(0.005);
+      expect(formatted).toContain('m'); // millicents indicator
     });
   });
 
@@ -127,123 +129,89 @@ describe('Cost Monitor Module', () => {
 
     beforeEach(() => {
       tracker = createCostTracker({
-        dailyLimit: 10.0,
-        perFixLimit: 2.0,
+        daily: 10.0,
+        perOperation: 2.0,
+        warning: 0.5,
       });
     });
 
     it('should create cost tracker with frozen API', () => {
       expect(Object.isFrozen(tracker)).toBe(true);
+      expect(tracker).toHaveProperty('recordCost');
+      expect(tracker).toHaveProperty('getTotalCost');
+      expect(tracker).toHaveProperty('getOperations');
+      expect(tracker).toHaveProperty('canAfford');
+      expect(tracker).toHaveProperty('generateReport');
+      expect(tracker).toHaveProperty('reset');
     });
 
-    it('should record fix costs', () => {
-      const result = tracker.recordFix(1.5);
+    it('should record costs', () => {
+      const operation = tracker.recordCost(1.5, { filename: 'test.js' });
 
-      expect(result.cost).toBe(1.5);
-      expect(result.dailySpend).toBe(1.5);
-      expect(result.fixCount).toBe(1);
-      expect(Object.isFrozen(result)).toBe(true);
+      expect(operation.cost).toBe(1.5);
+      expect(operation).toHaveProperty('timestamp');
+      expect(operation.filename).toBe('test.js');
+      expect(Object.isFrozen(operation)).toBe(true);
     });
 
     it('should accumulate costs', () => {
-      tracker.recordFix(1.0);
-      const result = tracker.recordFix(2.0);
+      tracker.recordCost(1.0);
+      tracker.recordCost(2.0);
 
-      expect(result.dailySpend).toBe(3.0);
-      expect(result.fixCount).toBe(2);
+      const total = tracker.getTotalCost();
+      expect(total).toBe(3.0);
     });
 
-    it('should check if fix is affordable', () => {
-      const check1 = tracker.canAfford(5.0);
-      expect(check1.allowed).toBe(false); // Over $2 per-fix limit
-      expect(check1.withinDailyLimit).toBe(true);
-      expect(check1.withinPerFixLimit).toBe(false); // Over $2 per fix limit
+    it('should check affordability', () => {
+      tracker.recordCost(5.0);
 
-      const check2 = tracker.canAfford(1.5);
-      expect(check2.allowed).toBe(true);
-      expect(check2.withinPerFixLimit).toBe(true);
-    });
-
-    it('should return stats correctly', () => {
-      tracker.recordFix(1.0);
-      tracker.recordFix(2.0);
-
-      const stats = tracker.getStats();
-
-      expect(stats.dailySpend).toBe(3.0);
-      expect(stats.fixCount).toBe(2);
-      expect(stats.averageCostPerFix).toBe(1.5);
-      expect(Object.isFrozen(stats)).toBe(true);
+      const canAfford = tracker.canAfford(4.0);
+      expect(canAfford).toHaveProperty('allowed');
+      expect(canAfford.withinDaily).toBe(true);
+      expect(Object.isFrozen(canAfford)).toBe(true);
     });
 
     it('should generate cost report', () => {
-      tracker.recordFix(1.0);
-      tracker.recordFix(2.0);
+      tracker.recordCost(1.0, { operation: 'fix1' });
+      tracker.recordCost(2.0, { operation: 'fix2' });
 
       const report = tracker.generateReport();
 
-      expect(report).toContain('Cost Report');
-      expect(report).toContain('Daily Spend');
-      expect(report).toContain('Fixes Completed');
-      expect(typeof report).toBe('string');
+      expect(report.totalCost).toBe(3.0);
+      expect(report.operationCount).toBe(2);
+      expect(report.averageCost).toBe(1.5);
+      expect(report.withinLimits).toBe(true);
+      expect(Object.isFrozen(report)).toBe(true);
     });
 
     it('should reset tracker', () => {
-      tracker.recordFix(5.0);
-      const resetResult = tracker.reset();
+      tracker.recordCost(5.0);
+      tracker.reset();
 
-      expect(resetResult.success).toBe(true);
-
-      const stats = tracker.getStats();
-      expect(stats.dailySpend).toBe(0);
-      expect(stats.fixCount).toBe(0);
+      const total = tracker.getTotalCost();
+      expect(total).toBe(0);
     });
   });
 
-  describe('Convenience Functions', () => {
-    it('should check if fix is affordable using default tracker', () => {
-      const result = canAffordFix(1.0);
-      expect(typeof result).toBe('boolean');
+  describe('Pure Function Properties', () => {
+    it('should always return same result for same input', () => {
+      const cost1 = calculateCost('gpt-4o-mini', 1000, 500);
+      const cost2 = calculateCost('gpt-4o-mini', 1000, 500);
+
+      expect(cost1).toBe(cost2);
     });
 
-    it('should record fix cost using default tracker', () => {
-      const result = recordFixCost(1.0);
-      expect(result).toHaveProperty('cost');
-      expect(result).toHaveProperty('dailySpend');
-    });
+    it('should not mutate pricing objects', () => {
+      const pricing = getModelPricing('gpt-4o-mini');
+      const originalInput = pricing.input;
 
-    it('should get stats using default tracker', () => {
-      const stats = getCostStats();
-      expect(stats).toHaveProperty('dailySpend');
-      expect(stats).toHaveProperty('fixCount');
-    });
-
-    it('should generate report using default tracker', () => {
-      const report = generateCostReport();
-      expect(typeof report).toBe('string');
-      expect(report).toContain('Cost Report');
-    });
-  });
-
-  describe('Immutability', () => {
-    it('should return frozen objects from cost calculations', () => {
-      const comparison = compareModelCosts('gpt-4o-mini', 'gpt-4', 1000, 1000);
-      expect(Object.isFrozen(comparison)).toBe(true);
-    });
-
-    it('should not allow tracker state mutation from outside', () => {
-      const tracker = createCostTracker();
-      const stats1 = tracker.getStats();
-
-      // Attempt to mutate (should have no effect)
       try {
-        stats1.dailySpend = 999;
+        pricing.input = 999;
       } catch (e) {
         // Expected in strict mode
       }
 
-      const stats2 = tracker.getStats();
-      expect(stats2.dailySpend).not.toBe(999);
+      expect(pricing.input).toBe(originalInput);
     });
   });
 });

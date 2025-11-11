@@ -1,16 +1,17 @@
 /**
- * Validation Schemas - Type-safe validation with Zod
+ * Validation Schemas for Bug Fixer Agent
  *
- * Provides runtime validation for:
- * - Bug fix results
- * - Test outputs
- * - Configuration objects
+ * Bug-fixer-specific validation schemas using shared validation utilities.
  */
 
+import {
+  createSafeParser,
+  createValidator,
+} from '@jordanbmowry/agent-configuration/validation-utils';
 import { z } from 'zod';
 
 // ============================================================================
-// CORE SCHEMAS
+// BUG FIXER SCHEMAS
 // ============================================================================
 
 /**
@@ -36,23 +37,6 @@ export const TestOutputSchema = z.object({
   output: z.string(),
   hasFailures: z.boolean().optional(),
   errors: z.array(z.string()).optional(),
-});
-
-/**
- * Configuration schema
- */
-export const ConfigSchema = z.object({
-  name: z.string().min(1),
-  model: z.string().min(1),
-  maxTokens: z.number().int().positive(),
-  temperature: z.number().min(0).max(2),
-  description: z.string().optional(),
-  costPer1KTokens: z
-    .object({
-      input: z.number().positive(),
-      output: z.number().positive(),
-    })
-    .optional(),
 });
 
 /**
@@ -95,175 +79,34 @@ export const GitOperationResultSchema = z.object({
 });
 
 // ============================================================================
-// VALIDATION FUNCTIONS
+// VALIDATORS (using shared utilities)
 // ============================================================================
 
-/**
- * Validate bug fix result
- * @param {any} data - Data to validate
- * @returns {Object} Validation result with success flag
- */
-export const validateBugFixResult = (data) => {
-  try {
-    BugFixResultSchema.parse(data);
-    return Object.freeze({
-      success: true,
-      data,
-    });
-  } catch (error) {
-    return Object.freeze({
-      success: false,
-      errors: error.errors,
-      message: 'Bug fix result validation failed',
-    });
-  }
-};
+export const validateBugFixResult = createValidator(
+  BugFixResultSchema,
+  'Bug fix result validation failed'
+);
 
-/**
- * Validate test output
- * @param {any} data - Data to validate
- * @returns {Object} Validation result with success flag
- */
-export const validateTestOutput = (data) => {
-  try {
-    TestOutputSchema.parse(data);
-    return Object.freeze({
-      success: true,
-      data,
-    });
-  } catch (error) {
-    return Object.freeze({
-      success: false,
-      errors: error.errors,
-      message: 'Test output validation failed',
-    });
-  }
-};
+export const validateTestOutput = createValidator(
+  TestOutputSchema,
+  'Test output validation failed'
+);
 
-/**
- * Validate configuration
- * @param {any} data - Data to validate
- * @returns {Object} Validation result with success flag
- */
-export const validateConfig = (data) => {
-  try {
-    ConfigSchema.parse(data);
-    return Object.freeze({
-      success: true,
-      data,
-    });
-  } catch (error) {
-    return Object.freeze({
-      success: false,
-      errors: error.errors,
-      message: 'Configuration validation failed',
-    });
-  }
-};
+export const validateCIResult = createValidator(CIResultSchema, 'CI result validation failed');
 
-/**
- * Validate CI result
- * @param {any} data - Data to validate
- * @returns {Object} Validation result with success flag
- */
-export const validateCIResult = (data) => {
-  try {
-    CIResultSchema.parse(data);
-    return Object.freeze({
-      success: true,
-      data,
-    });
-  } catch (error) {
-    return Object.freeze({
-      success: false,
-      errors: error.errors,
-      message: 'CI result validation failed',
-    });
-  }
-};
+export const validateCLIArgs = createValidator(CLIArgsSchema, 'CLI arguments validation failed');
 
-/**
- * Validate CLI arguments
- * @param {any} data - Data to validate
- * @returns {Object} Validation result with success flag
- */
-export const validateCLIArgs = (data) => {
-  try {
-    CLIArgsSchema.parse(data);
-    return Object.freeze({
-      success: true,
-      data,
-    });
-  } catch (error) {
-    return Object.freeze({
-      success: false,
-      errors: error.errors,
-      message: 'CLI arguments validation failed',
-    });
-  }
-};
-
-/**
- * Validate git operation result
- * @param {any} data - Data to validate
- * @returns {Object} Validation result with success flag
- */
-export const validateGitOperationResult = (data) => {
-  try {
-    GitOperationResultSchema.parse(data);
-    return Object.freeze({
-      success: true,
-      data,
-    });
-  } catch (error) {
-    return Object.freeze({
-      success: false,
-      errors: error.errors,
-      message: 'Git operation result validation failed',
-    });
-  }
-};
+export const validateGitOperationResult = createValidator(
+  GitOperationResultSchema,
+  'Git operation result validation failed'
+);
 
 // ============================================================================
-// SAFE PARSING (No Exceptions)
+// SAFE PARSERS (using shared utilities)
 // ============================================================================
 
-/**
- * Safely parse bug fix result without throwing
- * @param {any} data - Data to parse
- * @returns {Object} Parse result
- */
-export const safeParseBugFixResult = (data) => {
-  const result = BugFixResultSchema.safeParse(data);
-  return Object.freeze(result);
-};
-
-/**
- * Safely parse test output without throwing
- * @param {any} data - Data to parse
- * @returns {Object} Parse result
- */
-export const safeParseTestOutput = (data) => {
-  const result = TestOutputSchema.safeParse(data);
-  return Object.freeze(result);
-};
-
-/**
- * Safely parse configuration without throwing
- * @param {any} data - Data to parse
- * @returns {Object} Parse result
- */
-export const safeParseConfig = (data) => {
-  const result = ConfigSchema.safeParse(data);
-  return Object.freeze(result);
-};
-
-/**
- * Safely parse CI result without throwing
- * @param {any} data - Data to parse
- * @returns {Object} Parse result
- */
-export const safeParseCIResult = (data) => {
-  const result = CIResultSchema.safeParse(data);
-  return Object.freeze(result);
-};
+export const safeParseBugFixResult = createSafeParser(BugFixResultSchema);
+export const safeParseTestOutput = createSafeParser(TestOutputSchema);
+export const safeParseCIResult = createSafeParser(CIResultSchema);
+export const safeParseCLIArgs = createSafeParser(CLIArgsSchema);
+export const safeParseGitOperationResult = createSafeParser(GitOperationResultSchema);
