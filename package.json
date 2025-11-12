@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^0.0.66",
-    "@jordanbmowry/agent-configuration": "file:../agent-configuration",
+    "@jordanbmowry/agent-configuration": "file:../agent-configuration/jordanbmowry-agent-configuration-2.0.0.tgz",
     "ai": "^4.0.0",
     "dotenv": "^16.4.5",
     "zod": "^3.23.8"

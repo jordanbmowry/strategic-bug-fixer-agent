@@ -192,6 +192,82 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed design documentation.
 - **security** - Security-focused (gpt-4o, 4000 tokens, $0.05/fix)
 - **performance** - Performance optimization (gpt-4o, 3500 tokens, $0.04/fix)
 
+### Prompt Templates
+
+Control how the AI fixes bugs with customizable markdown templates. Create `.agent-config.json`:
+
+```json
+{
+  "bugFixer": {
+    "prompts": {
+      "template": "conservative",
+      "customVariables": {
+        "safetyLevel": "strict"
+      }
+    }
+  }
+}
+```
+
+**Built-in Templates:**
+- `default` - Balanced fix with minimal targeted changes
+- `conservative` - Smallest possible fix, preserve everything (safest)
+- `aggressive` - Fix bugs AND improve code quality (refactor problematic patterns)
+
+**Custom Templates:**
+
+Create `prompts/bug-fixer/team-standard.md`:
+
+```markdown
+# Team Bug Fixing Standard
+
+You are fixing bugs for our {teamName} codebase.
+
+## Error
+**{errorMessage}**
+
+## Code to Fix
+\`\`\`{language}
+{code}
+\`\`\`
+
+## Team Rules
+1. Always add error handling
+2. Include descriptive comments
+3. Follow our style guide: {styleGuide}
+4. Safety level: {safetyLevel}
+
+**Return ONLY the fixed code - no markdown formatting.**
+
+File: {filename}
+```
+
+Then use:
+
+```json
+{
+  "bugFixer": {
+    "prompts": {
+      "template": "team-standard",
+      "templatesDir": "./prompts",
+      "customVariables": {
+        "teamName": "Backend API Team",
+        "styleGuide": "Airbnb JavaScript",
+        "safetyLevel": "strict"
+      }
+    }
+  }
+}
+```
+
+**Template Variables:**
+- `{code}` - Code with the bug
+- `{filename}` - File path
+- `{errorMessage}` - Error description from test failure
+- `{language}` - Programming language (javascript, typescript, python, go, rust)
+- `{safetyLevel}` - Safety mode from config (strict, moderate, lenient)
+- Custom variables from `customVariables` in config
+
 ### Environment Variables
 
 ```bash

@@ -12,8 +12,8 @@ importers:
         specifier: ^0.0.66
         version: 0.0.66(zod@3.25.76)
       '@jordanbmowry/agent-configuration':
-        specifier: file:../agent-configuration
-        version: file:../agent-configuration(@ai-sdk/openai@0.0.66(zod@3.25.76))(ai@4.3.19(react@19.2.0)(zod@3.25.76))
+        specifier: file:../agent-configuration/jordanbmowry-agent-configuration-2.0.0.tgz
+        version: file:../agent-configuration/jordanbmowry-agent-configuration-2.0.0.tgz(@ai-sdk/openai@0.0.66(zod@3.25.76))(ai@4.3.19(react@19.2.0)(zod@3.25.76))
       ai:
         specifier: ^4.0.0
         version: 4.3.19(react@19.2.0)(zod@3.25.76)
@@ -307,8 +307,9 @@ packages:
     resolution: {integrity: sha512-ZXRY4jNvVgSVQ8DL3LTcakaAtXwTVUxE81hslsyD2AtoXW/wVob10HkOJ1X/pAlcI7D+2YoZKg5do8G/w6RYgA==}
     engines: {node: '>=8'}
 
-  '@jordanbmowry/agent-configuration@file:../agent-configuration':
-    resolution: {directory: ../agent-configuration, type: directory}
+  '@jordanbmowry/agent-configuration@file:../agent-configuration/jordanbmowry-agent-configuration-2.0.0.tgz':
+    resolution: {integrity: sha512-tNtrzipgllCl6wsm6C3Q3nrUHFOqoAE25XS27N4j+XDu0rfUr6UeAXQx9RHXRK/dUZzRY2iJ3rkflV2luDdNPg==, tarball: file:../agent-configuration/jordanbmowry-agent-configuration-2.0.0.tgz}
+    version: 2.0.0
     peerDependencies:
       '@ai-sdk/openai': ^0.0.66
       ai: ^4.0.0
@@ -1096,11 +1097,12 @@ snapshots:
 
   '@istanbuljs/schema@0.1.3': {}
 
-  '@jordanbmowry/agent-configuration@file:../agent-configuration(@ai-sdk/openai@0.0.66(zod@3.25.76))(ai@4.3.19(react@19.2.0)(zod@3.25.76))':
+  '@jordanbmowry/agent-configuration@file:../agent-configuration/jordanbmowry-agent-configuration-2.0.0.tgz(@ai-sdk/openai@0.0.66(zod@3.25.76))(ai@4.3.19(react@19.2.0)(zod@3.25.76))':
     dependencies:
       '@ai-sdk/openai': 0.0.66(zod@3.25.76)
       ai: 4.3.19(react@19.2.0)(zod@3.25.76)
       defu: 6.1.4
+      zod: 3.25.76
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
