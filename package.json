@@ -13,8 +13,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write --unsafe .",
     "format": "biome format --write .",
-    "typecheck": "tsc --noEmit",
-    "demo": "node scripts/demo-bug-fixer.js"
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "ai",
@@ -35,6 +34,7 @@
   "dependencies": {
     "@ai-sdk/openai": "^0.0.66",
     "@jordanbmowry/agent-configuration": "file:../agent-configuration/jordanbmowry-agent-configuration-2.0.0.tgz",
+    "@octokit/rest": "^22.0.1",
     "ai": "^4.0.0",
     "dotenv": "^16.4.5",
     "zod": "^3.23.8"

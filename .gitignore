@@ -38,7 +38,3 @@ pnpm-debug.log*
 tmp/
 temp/
 *.tmp
-
-# Old code (for reference during refactoring)
-bug-fixer.js
-ci-bug-fixer.js
