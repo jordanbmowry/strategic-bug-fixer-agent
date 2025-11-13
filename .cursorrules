@@ -1,0 +1,102 @@
+# Cursor Rules for Strategic Bug Fixer Agent
+
+## Project Overview
+AI-powered bug detection and fixing agent built with functional programming principles. Uses OpenAI GPT models to automatically detect and fix bugs with cost monitoring and CI/CD integration.
+
+## Core Principles
+
+### Functional Programming
+- **Pure Functions**: All bug-fixing logic must be pure functions with no side effects
+- **Immutability**: Use `Object.freeze()` for all configurations and data structures
+- **Composition**: Build complex behavior from simple, composable functions
+- **Isolated Side Effects**: File I/O, git operations, and AI API calls must be isolated
+- **No Classes**: Prefer factory functions and functional composition over classes
+
+### Code Style
+- **Quotes**: Use single quotes for strings (as per biome.json)
+- **Indentation**: Use spaces with width 2
+- **Line Width**: Maximum 100 characters
+- **Semicolons**: Always use semicolons
+- **Node.js Protocol**: Always use Node.js protocol for built-in modules (e.g., `node:fs`, `node:path`, `node:url`)
+- **Import Organization**: Organize imports automatically with Biome
+
+### Type Safety
+- Use JSDoc types for all exported functions
+- Use Zod schemas for runtime validation
+- Avoid `any` types - use `unknown` and type guards instead
+
+### Testing
+- Write unit tests for all pure functions
+- Use Vitest for testing
+- Mock AI API calls to prevent costs in tests
+- Mock file system operations
+- Aim for high test coverage
+
+### Bug Fixing Logic
+- Always validate bug fixes with test commands before committing
+- Support multiple fix strategies: quick, thorough, security, performance
+- Track costs for each fix operation
+- Respect daily and per-fix cost limits
+
+### Cost Management
+- Default to `gpt-4o-mini` for cost-effective bug fixes
+- Always estimate costs before running fixes
+- Track costs with cost monitor
+- Respect configured limits ($10/day, $2/fix by default)
+
+### Configuration
+- Load configuration from `.agent-config.json` if available
+- Support prompt templates for customizing AI behavior
+- Use configuration adapter from `@jordanbmowry/agent-configuration`
+
+### CI/CD Integration
+- Support automated bug fixing in GitHub Actions
+- Auto-commit fixes only when tests pass
+- Never auto-push by default (require explicit configuration)
+
+## Common Patterns
+
+### Creating Immutable Configs
+```javascript
+const createConfig = (options) => {
+  const config = {
+    model: options.model || 'gpt-4o-mini',
+    maxTokens: options.maxTokens || 2000,
+  };
+  return Object.freeze(config);
+};
+```
+
+### Pure Function Example
+```javascript
+/**
+ * Analyzes code for potential bugs
+ * @param {string} code - Code to analyze
+ * @param {string} errorMessage - Error message from test failure
+ * @returns {Object} Analysis result
+ */
+const analyzeBug = (code, errorMessage) => {
+  // Pure function - no side effects
+  return Object.freeze({
+    success: true,
+    bugLocation: findBugLocation(code, errorMessage),
+    suggestedFix: generateFix(code, errorMessage),
+  });
+};
+```
+
+### Error Handling
+- Return result objects with `success` boolean and `error` message
+- Never throw exceptions in pure functions
+- Use Zod for validation errors
+- Always validate AI responses before applying fixes
+
+## Avoid
+- ❌ Mutating function parameters
+- ❌ Side effects in pure functions
+- ❌ Using classes when factory functions suffice
+- ❌ `any` types without proper type guards
+- ❌ Making real AI API calls in tests
+- ❌ Auto-committing without test validation
+- ❌ Ignoring cost limits
+
