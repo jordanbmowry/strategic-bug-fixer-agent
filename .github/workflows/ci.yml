@@ -46,7 +46,16 @@ jobs:
       - name: Install dependencies
         # Per pnpm CI best practices: https://pnpm.io/continuous-integration
         working-directory: strategic-bug-fixer-agent
-        run: pnpm install --frozen-lockfile
+        run: |
+          if ! pnpm install --frozen-lockfile 2>&1; then
+            echo "⚠️ Install with --frozen-lockfile failed, trying with build approval..."
+            pnpm approve-builds 2>&1 || true
+            if ! pnpm install --frozen-lockfile 2>&1; then
+              echo "⚠️ Trying with --shamefully-hoist as fallback"
+              echo "See: https://pnpm.io/cli/install#--shamefully-hoist"
+              pnpm install --frozen-lockfile --shamefully-hoist || exit 1
+            fi
+          fi
       
       - name: Run tests
         working-directory: strategic-bug-fixer-agent
@@ -83,7 +92,16 @@ jobs:
       - name: Install dependencies
         # Per pnpm CI best practices: https://pnpm.io/continuous-integration
         working-directory: strategic-bug-fixer-agent
-        run: pnpm install --frozen-lockfile
+        run: |
+          if ! pnpm install --frozen-lockfile 2>&1; then
+            echo "⚠️ Install with --frozen-lockfile failed, trying with build approval..."
+            pnpm approve-builds 2>&1 || true
+            if ! pnpm install --frozen-lockfile 2>&1; then
+              echo "⚠️ Trying with --shamefully-hoist as fallback"
+              echo "See: https://pnpm.io/cli/install#--shamefully-hoist"
+              pnpm install --frozen-lockfile --shamefully-hoist || exit 1
+            fi
+          fi
       
       - name: Run Biome linter
         working-directory: strategic-bug-fixer-agent
