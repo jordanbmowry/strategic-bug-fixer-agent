@@ -17,7 +17,11 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { openai } from '@ai-sdk/openai';
 import { estimateCost, isWithinLimits } from '@jordanbmowry/agent-configuration/cost-monitor';
 import { createGitHubCostTracker } from '@jordanbmowry/agent-configuration/github-cost-tracker';
+import { createLogger } from '@jordanbmowry/agent-configuration/logger';
 import { generateText } from 'ai';
+
+// Create logger for bug fixer
+const logger = createLogger({ agentName: 'bug-fixer' });
 import {
   buildBugFixPrompt,
   getConfig,
@@ -197,16 +201,36 @@ export const runTests = (command) => {
  * @returns {Promise<string>} Fixed code
  */
 export const analyzeAndFix = async (code, filename, errorMessage, config) => {
+  logger.debug('analyzeAndFix called', {
+    filename,
+    codeLength: code.length,
+    errorMessage,
+    model: config.model,
+  });
+
   const prompt = buildBugFixPrompt(code, filename, errorMessage);
 
   // Cost check before API call
   const estimatedCost = estimateCost(config.model, code, config.maxTokens);
   const limitCheck = isWithinLimits(estimatedCost);
   if (!limitCheck.allowed) {
+    logger.error('Cost limit exceeded', {
+      estimatedCost,
+      reason: limitCheck.reason,
+      model: config.model,
+    });
     throw new Error(
       limitCheck.reason || `Cost limit exceeded. Estimated: $${estimatedCost.toFixed(4)}`
     );
   }
+
+  logger.info('Calling OpenAI API for bug fix', {
+    model: config.model,
+    maxTokens: config.maxTokens,
+    temperature: config.temperature,
+    promptLength: prompt.length,
+    estimatedCost,
+  });
 
   const { text, usage } = await generateText({
     model: openai(config.model),
@@ -215,22 +239,106 @@ export const analyzeAndFix = async (code, filename, errorMessage, config) => {
     temperature: config.temperature,
   });
 
+  logger.info('OpenAI API call completed', {
+    model: config.model,
+    responseLength: text?.length || 0,
+    hasUsage: !!usage,
+  });
+
   // Track cost in GitHub
   const costTracker = createGitHubCostTracker();
-  if (costTracker.isAvailable() && usage) {
+  
+  // Normalize usage object
+  let normalizedUsage = null;
+  if (usage) {
+    logger.debug('Usage object received', {
+      usageType: typeof usage,
+      usageKeys: Object.keys(usage),
+      rawUsage: usage,
+    });
+
+    const promptTokens = usage.promptTokens ?? usage.inputTokens ?? usage.input_tokens ?? 0;
+    const completionTokens = usage.completionTokens ?? usage.outputTokens ?? usage.output_tokens ?? 0;
+
+    normalizedUsage = {
+      promptTokens: Number(promptTokens) || 0,
+      completionTokens: Number(completionTokens) || 0,
+      totalTokens: usage.totalTokens ?? (Number(promptTokens) + Number(completionTokens)),
+    };
+
+    logger.info('Usage normalized', {
+      normalizedUsage,
+    });
+
+    if (normalizedUsage.promptTokens === 0 && normalizedUsage.completionTokens === 0) {
+      logger.error('CRITICAL: Usage object has 0 tokens but API call succeeded!', {
+        usage,
+        normalizedUsage,
+      });
+    }
+  } else {
+    logger.error('CRITICAL: Usage object is missing from AI response!', {
+      hasText: !!text,
+      textLength: text?.length || 0,
+    });
+  }
+
+  if (costTracker.isAvailable() && normalizedUsage) {
     try {
+      logger.info('Tracking cost in GitHub', {
+        promptTokens: normalizedUsage.promptTokens,
+        completionTokens: normalizedUsage.completionTokens,
+        model: config.model,
+      });
+
       const result = await costTracker.trackCost(
         'bugFixer',
-        usage.promptTokens || 0,
-        usage.completionTokens || 0,
+        normalizedUsage.promptTokens,
+        normalizedUsage.completionTokens,
         config.model
       );
+
+      logger.logApiCall('analyzeAndFix', normalizedUsage, config.model, result.cost, {
+        responseLength: text?.length || 0,
+      });
+
+      logger.logCostTracking('analyzeAndFix', result, {
+        promptTokens: normalizedUsage.promptTokens,
+        completionTokens: normalizedUsage.completionTokens,
+        model: config.model,
+      });
+
       console.log(
         `💰 Cost: $${result.cost.toFixed(4)} | Monthly: $${result.monthlyTotal.toFixed(2)}`
       );
+
+      if (result.cost === 0 && (normalizedUsage.promptTokens > 0 || normalizedUsage.completionTokens > 0)) {
+        logger.error('CRITICAL: Cost calculated as $0 but tokens exist!', {
+          promptTokens: normalizedUsage.promptTokens,
+          completionTokens: normalizedUsage.completionTokens,
+          model: config.model,
+          cost: result.cost,
+        });
+      }
     } catch (error) {
+      logger.error('Failed to track cost in GitHub', {
+        error: error.message,
+        stack: error.stack,
+        promptTokens: normalizedUsage?.promptTokens,
+        completionTokens: normalizedUsage?.completionTokens,
+        model: config.model,
+      });
       console.warn('⚠️  Failed to track cost in GitHub:', error.message);
     }
+  } else if (!costTracker.isAvailable()) {
+    logger.warn('GitHub cost tracker not available', {
+      hasUsage: !!normalizedUsage,
+    });
+  } else if (!normalizedUsage) {
+    logger.error('Cannot track cost: usage object is missing or invalid', {
+      hasUsage: !!usage,
+      usage,
+    });
   }
 
   return extractCleanCode(text);
