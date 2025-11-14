@@ -9,8 +9,12 @@
  */
 
 import { execSync } from 'node:child_process';
+import { createLogger } from '@jordanbmowry/agent-configuration/logger';
 import { fileExists, fixBug, runTests } from './bug-fixer.js';
 import { validateTestOutput } from './validation-schemas.js';
+
+// Create logger for CI bug fixer
+const logger = createLogger({ agentName: 'ci-bug-fixer' });
 
 // ============================================================================
 // PURE FUNCTIONS - Test Output Parsing
@@ -226,15 +230,18 @@ export const pushChanges = () => {
  * @returns {Object} Result with success flag
  */
 export const commitFixes = (message, shouldPush = false) => {
+  logger.info('Committing fixes', { function: 'commitFixes', message, shouldPush });
   console.log('📝 Committing fixes...');
 
   const gitConfig = configureGit();
   if (!gitConfig.success) {
+    logger.warn('Git configuration failed', { function: 'commitFixes', error: gitConfig.error });
     console.log('⚠️  Git configuration failed:', gitConfig.error);
   }
 
   const staged = stageChanges();
   if (!staged.success) {
+    logger.error('Failed to stage changes', { function: 'commitFixes', error: staged.error });
     console.log('❌ Failed to stage changes:', staged.error);
     return Object.freeze({
       success: false,
@@ -244,6 +251,7 @@ export const commitFixes = (message, shouldPush = false) => {
 
   const committed = commitChanges(message);
   if (!committed.success) {
+    logger.error('Failed to commit changes', { function: 'commitFixes', error: committed.error, message });
     console.log('❌ Failed to commit:', committed.error);
     return Object.freeze({
       success: false,
@@ -251,11 +259,13 @@ export const commitFixes = (message, shouldPush = false) => {
     });
   }
 
+  logger.info('Changes committed', { function: 'commitFixes', message });
   console.log('✅ Changes committed');
 
   if (shouldPush) {
     const pushed = pushChanges();
     if (!pushed.success) {
+      logger.error('Failed to push changes', { function: 'commitFixes', error: pushed.error });
       console.log('❌ Failed to push:', pushed.error);
       return Object.freeze({
         success: false,
@@ -263,6 +273,7 @@ export const commitFixes = (message, shouldPush = false) => {
         committed: true,
       });
     }
+    logger.info('Changes pushed successfully', { function: 'commitFixes' });
     console.log('✅ Changes pushed');
   }
 
@@ -283,14 +294,18 @@ export const commitFixes = (message, shouldPush = false) => {
  * @returns {Promise<Object>} CI result object
  */
 export const runCIFix = async (options = {}) => {
+  logger.info('Starting CI fix process', { function: 'runCIFix', options });
   console.log('🔍 Checking for test failures...');
 
   const config = createCIConfig(options);
+  logger.debug('CI configuration created', { function: 'runCIFix', config });
 
   // Run tests to see what's failing
+  logger.debug('Running tests', { function: 'runCIFix', testCommand: config.testCommand });
   const testResult = runTests(config.testCommand);
 
   if (testResult.success) {
+    logger.info('All tests passing - no fixes needed', { function: 'runCIFix' });
     console.log('✅ All tests passing - no fixes needed');
     return createCIResult([], {
       testsPassedInitially: true,
@@ -299,18 +314,33 @@ export const runCIFix = async (options = {}) => {
   }
 
   // Tests failed - parse output and identify files
+  logger.warn('Tests failed - attempting to fix', { 
+    function: 'runCIFix',
+    testCommand: config.testCommand,
+    hasOutput: !!testResult.output,
+    hasError: !!testResult.error,
+  });
   console.log('❌ Tests failed - attempting to fix...');
 
   const testOutput = testResult.output + (testResult.error || '');
+  logger.debug('Test output received', { function: 'runCIFix', outputLength: testOutput.length });
+  
   const validation = validateTestOutput({ output: testOutput });
 
   if (!validation.success) {
+    logger.warn('Test output validation warnings', { function: 'runCIFix', errors: validation.errors });
     console.warn('⚠️  Test output validation warnings:', validation.errors);
   }
 
   const filesToFix = identifyFilesToFix(testOutput);
+  logger.info('Files to fix identified', { 
+    function: 'runCIFix',
+    count: filesToFix.length, 
+    files: filesToFix 
+  });
 
   if (filesToFix.length === 0) {
+    logger.warn('Could not identify files to fix from test output', { function: 'runCIFix', testOutput });
     console.log('⚠️  Could not identify files to fix from test output');
     return createCIResult([], {
       error: 'Could not identify files to fix',
@@ -318,11 +348,13 @@ export const runCIFix = async (options = {}) => {
     });
   }
 
+  logger.info('Starting file fixes', { function: 'runCIFix', fileCount: filesToFix.length, files: filesToFix });
   console.log(`🔧 Attempting to fix ${filesToFix.length} file(s)...`);
 
   // Fix each file
   const fixes = [];
   for (const file of filesToFix) {
+    logger.info('Fixing file', { function: 'runCIFix', file, attempt: fixes.length + 1, total: filesToFix.length });
     console.log(`🔧 Fixing ${file}...`);
 
     const errorContext = parseTestOutput(testOutput).error;
@@ -335,8 +367,10 @@ export const runCIFix = async (options = {}) => {
     fixes.push(fixResult);
 
     if (fixResult.success) {
+      logger.info('File fixed successfully', { function: 'runCIFix', file, linesChanged: fixResult.linesChanged });
       console.log(`✅ Fixed ${file}`);
     } else {
+      logger.error('Failed to fix file', { function: 'runCIFix', file, error: fixResult.error });
       console.log(`❌ Could not fix ${file}`);
     }
   }
@@ -363,16 +397,20 @@ export const runCIFix = async (options = {}) => {
  */
 export const runCIFixWithRetries = async (options = {}) => {
   const config = createCIConfig(options);
+  logger.info('Starting CI fix with retries', { function: 'runCIFixWithRetries', maxRetries: config.maxRetries, config });
   let lastResult = null;
 
   for (let attempt = 1; attempt <= config.maxRetries; attempt++) {
+    logger.info('CI fix attempt', { function: 'runCIFixWithRetries', attempt, maxRetries: config.maxRetries });
     console.log(`\n🔄 Attempt ${attempt} of ${config.maxRetries}`);
 
     lastResult = await runCIFix(options);
 
     // Check if tests pass now
+    logger.debug('Re-running tests after fix attempt', { function: 'runCIFixWithRetries', attempt });
     const testResult = runTests(config.testCommand);
     if (testResult.success) {
+      logger.info('All tests passing after fixes', { function: 'runCIFixWithRetries', attempt, totalAttempts: attempt });
       console.log('🎉 All tests passing after fixes!');
       return Object.freeze({
         ...lastResult,
@@ -382,10 +420,20 @@ export const runCIFixWithRetries = async (options = {}) => {
     }
 
     if (attempt < config.maxRetries) {
+      logger.warn('Tests still failing, will retry', { function: 'runCIFixWithRetries', attempt, maxRetries: config.maxRetries });
       console.log('⚠️  Tests still failing, retrying...');
     }
   }
 
+  logger.error('Could not fix all issues after retries', { 
+    function: 'runCIFixWithRetries',
+    attempts: config.maxRetries,
+    lastResult: lastResult ? {
+      totalAttempted: lastResult.totalAttempted,
+      successful: lastResult.successful,
+      failed: lastResult.failed,
+    } : null,
+  });
   console.log('💥 Could not fix all issues after retries');
   return Object.freeze({
     ...lastResult,
@@ -403,10 +451,21 @@ export const runCIFixWithRetries = async (options = {}) => {
  */
 export const main = async () => {
   try {
+    logger.info('Starting CI bug fixer main process', { function: 'main' });
     const result = await runCIFixWithRetries({
       maxRetries: 3,
       autoCommit: true,
       autoPush: true,
+    });
+
+    logger.info('CI fix process completed', {
+      function: 'main',
+      totalAttempted: result.totalAttempted,
+      successful: result.successful,
+      failed: result.failed,
+      finalTestsPassed: result.finalTestsPassed,
+      committed: result.committed,
+      attempts: result.attempts,
     });
 
     console.log('\n📊 Final Results:');
@@ -421,6 +480,11 @@ export const main = async () => {
 
     process.exit(result.finalTestsPassed ? 0 : 1);
   } catch (error) {
+    logger.error('Fatal error in CI bug fixer', { 
+      function: 'main',
+      error: error.message, 
+      stack: error.stack 
+    });
     console.error('❌ Fatal error:', error);
     process.exit(1);
   }
@@ -429,6 +493,7 @@ export const main = async () => {
 // Run if called directly
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((error) => {
+    logger.error('Unhandled fatal error', { function: 'main', error: error.message, stack: error.stack });
     console.error('Fatal error:', error);
     process.exit(1);
   });

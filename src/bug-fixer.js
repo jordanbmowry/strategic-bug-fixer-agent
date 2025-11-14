@@ -202,6 +202,7 @@ export const runTests = (command) => {
  */
 export const analyzeAndFix = async (code, filename, errorMessage, config) => {
   logger.debug('analyzeAndFix called', {
+    function: 'analyzeAndFix',
     filename,
     codeLength: code.length,
     errorMessage,
@@ -215,6 +216,7 @@ export const analyzeAndFix = async (code, filename, errorMessage, config) => {
   const limitCheck = isWithinLimits(estimatedCost);
   if (!limitCheck.allowed) {
     logger.error('Cost limit exceeded', {
+      function: 'analyzeAndFix',
       estimatedCost,
       reason: limitCheck.reason,
       model: config.model,
@@ -225,6 +227,7 @@ export const analyzeAndFix = async (code, filename, errorMessage, config) => {
   }
 
   logger.info('Calling OpenAI API for bug fix', {
+    function: 'analyzeAndFix',
     model: config.model,
     maxTokens: config.maxTokens,
     temperature: config.temperature,
@@ -240,6 +243,7 @@ export const analyzeAndFix = async (code, filename, errorMessage, config) => {
   });
 
   logger.info('OpenAI API call completed', {
+    function: 'analyzeAndFix',
     model: config.model,
     responseLength: text?.length || 0,
     hasUsage: !!usage,
@@ -252,6 +256,7 @@ export const analyzeAndFix = async (code, filename, errorMessage, config) => {
   let normalizedUsage = null;
   if (usage) {
     logger.debug('Usage object received', {
+      function: 'analyzeAndFix',
       usageType: typeof usage,
       usageKeys: Object.keys(usage),
       rawUsage: usage,
@@ -267,17 +272,20 @@ export const analyzeAndFix = async (code, filename, errorMessage, config) => {
     };
 
     logger.info('Usage normalized', {
+      function: 'analyzeAndFix',
       normalizedUsage,
     });
 
     if (normalizedUsage.promptTokens === 0 && normalizedUsage.completionTokens === 0) {
       logger.error('CRITICAL: Usage object has 0 tokens but API call succeeded!', {
+        function: 'analyzeAndFix',
         usage,
         normalizedUsage,
       });
     }
   } else {
     logger.error('CRITICAL: Usage object is missing from AI response!', {
+      function: 'analyzeAndFix',
       hasText: !!text,
       textLength: text?.length || 0,
     });
@@ -286,6 +294,7 @@ export const analyzeAndFix = async (code, filename, errorMessage, config) => {
   if (costTracker.isAvailable() && normalizedUsage) {
     try {
       logger.info('Tracking cost in GitHub', {
+        function: 'analyzeAndFix',
         promptTokens: normalizedUsage.promptTokens,
         completionTokens: normalizedUsage.completionTokens,
         model: config.model,
@@ -299,10 +308,12 @@ export const analyzeAndFix = async (code, filename, errorMessage, config) => {
       );
 
       logger.logApiCall('analyzeAndFix', normalizedUsage, config.model, result.cost, {
+        function: 'analyzeAndFix',
         responseLength: text?.length || 0,
       });
 
       logger.logCostTracking('analyzeAndFix', result, {
+        function: 'analyzeAndFix',
         promptTokens: normalizedUsage.promptTokens,
         completionTokens: normalizedUsage.completionTokens,
         model: config.model,
@@ -314,6 +325,7 @@ export const analyzeAndFix = async (code, filename, errorMessage, config) => {
 
       if (result.cost === 0 && (normalizedUsage.promptTokens > 0 || normalizedUsage.completionTokens > 0)) {
         logger.error('CRITICAL: Cost calculated as $0 but tokens exist!', {
+          function: 'analyzeAndFix',
           promptTokens: normalizedUsage.promptTokens,
           completionTokens: normalizedUsage.completionTokens,
           model: config.model,
@@ -322,6 +334,7 @@ export const analyzeAndFix = async (code, filename, errorMessage, config) => {
       }
     } catch (error) {
       logger.error('Failed to track cost in GitHub', {
+        function: 'analyzeAndFix',
         error: error.message,
         stack: error.stack,
         promptTokens: normalizedUsage?.promptTokens,
@@ -332,10 +345,12 @@ export const analyzeAndFix = async (code, filename, errorMessage, config) => {
     }
   } else if (!costTracker.isAvailable()) {
     logger.warn('GitHub cost tracker not available', {
+      function: 'analyzeAndFix',
       hasUsage: !!normalizedUsage,
     });
   } else if (!normalizedUsage) {
     logger.error('Cannot track cost: usage object is missing or invalid', {
+      function: 'analyzeAndFix',
       hasUsage: !!usage,
       usage,
     });
@@ -434,6 +449,12 @@ export const fixBug = async (filename, errorMessage = '', options = {}) => {
       testError: testResult.error,
     });
   } catch (error) {
+    logger.error('Error fixing bug', { 
+      function: 'fixBug',
+      filename, 
+      error: error.message, 
+      stack: error.stack 
+    });
     console.error(`❌ Error fixing bug in ${filename}:`, error.message);
     return createErrorResult(filename, error);
   }
@@ -497,6 +518,7 @@ export const main = async () => {
   }
 
   if (!fileExists(args.filename)) {
+    logger.error('File not found', { function: 'main', filename: args.filename });
     console.error(`❌ File not found: ${args.filename}`);
     process.exit(1);
   }
@@ -517,6 +539,7 @@ export const main = async () => {
 // Run if called directly
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((error) => {
+    logger.error('Fatal error in bug fixer', { function: 'main', error: error.message, stack: error.stack });
     console.error('Fatal error:', error);
     process.exit(1);
   });
