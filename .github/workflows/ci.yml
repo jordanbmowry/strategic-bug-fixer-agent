@@ -57,9 +57,20 @@ jobs:
             fi
           fi
       
-      - name: Run tests
+      - name: Run tests with coverage and HTML report
         working-directory: strategic-bug-fixer-agent
-        run: pnpm test
+        run: pnpm exec vitest run --coverage --reporter=html
+
+      - name: Upload Vitest reports (coverage + HTML)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-node-${{ matrix.node-version }}-${{ github.sha }}
+          path: |
+            strategic-bug-fixer-agent/coverage
+            strategic-bug-fixer-agent/vitest-report
+          retention-days: 7
+          if-no-files-found: ignore
   
   lint:
     name: Lint
